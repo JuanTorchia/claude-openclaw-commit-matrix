@@ -14,11 +14,11 @@ $ErrorActionPreference = "Stop"
 function Run-Git {
   param(
     [string]$Cwd,
-    [string[]]$Args
+    [string[]]$GitArgs
   )
-  $output = & git -C $Cwd @Args 2>&1
+  $output = & git -C $Cwd @GitArgs 2>&1
   if ($LASTEXITCODE -ne 0) {
-    throw "git $($Args -join ' ') failed in ${Cwd}:`n$output"
+    throw "git $($GitArgs -join ' ') failed in ${Cwd}:`n$output"
   }
   return $output
 }
@@ -26,9 +26,9 @@ function Run-Git {
 function Git-Optional {
   param(
     [string]$Cwd,
-    [string[]]$Args
+    [string[]]$GitArgs
   )
-  $output = & git -C $Cwd @Args 2>&1
+  $output = & git -C $Cwd @GitArgs 2>&1
   return [pscustomobject]@{
     ExitCode = $LASTEXITCODE
     Output = ($output -join "`n")
@@ -36,13 +36,13 @@ function Git-Optional {
 }
 
 $repo = (Resolve-Path -LiteralPath $RepoPath).Path
-$isRepo = Git-Optional -Cwd $repo -Args @("rev-parse", "--show-toplevel")
+$isRepo = Git-Optional -Cwd $repo -GitArgs @("rev-parse", "--show-toplevel")
 if ($isRepo.ExitCode -ne 0) {
   throw "RepoPath is not inside a git repository: $repo"
 }
 
-$repoRoot = (Run-Git -Cwd $repo -Args @("rev-parse", "--show-toplevel") | Select-Object -First 1).Trim()
-$status = Run-Git -Cwd $repoRoot -Args @("status", "--porcelain")
+$repoRoot = (Run-Git -Cwd $repo -GitArgs @("rev-parse", "--show-toplevel") | Select-Object -First 1).Trim()
+$status = Run-Git -Cwd $repoRoot -GitArgs @("status", "--porcelain")
 if ($status) {
   throw "Refusing to start from a dirty repo. Commit, stash, or clone a fresh copy first:`n$status"
 }
@@ -60,7 +60,7 @@ $outDirResolved = (Resolve-Path -LiteralPath $OutDir).Path
 
 $branch = "claude-openclaw-lab-$stamp"
 $worktree = Join-Path $outDirResolved "worktree"
-Run-Git -Cwd $repoRoot -Args @("worktree", "add", "-b", $branch, $worktree, "HEAD") | Out-Null
+Run-Git -Cwd $repoRoot -GitArgs @("worktree", "add", "-b", $branch, $worktree, "HEAD") | Out-Null
 
 $cases = @(
   [pscustomobject]@{
@@ -122,9 +122,9 @@ $testFile = Join-Path $worktree "openclaw-agent-commit-lab.txt"
 
 try {
   foreach ($case in $cases) {
-    $before = (Run-Git -Cwd $worktree -Args @("rev-parse", "HEAD") | Select-Object -First 1).Trim()
+    $before = (Run-Git -Cwd $worktree -GitArgs @("rev-parse", "HEAD") | Select-Object -First 1).Trim()
     Add-Content -LiteralPath $testFile -Value "case=$($case.Id) ts=$(Get-Date -Format o)"
-    Run-Git -Cwd $worktree -Args @("add", "--", $testFile) | Out-Null
+    Run-Git -Cwd $worktree -GitArgs @("add", "--", $testFile) | Out-Null
 
     $prompt = @"
 Run exactly this command in the current repository, then stop:
@@ -150,14 +150,14 @@ Do not edit files. Do not choose a different commit message. Report whether the 
       Pop-Location
     }
 
-    $after = (Run-Git -Cwd $worktree -Args @("rev-parse", "HEAD") | Select-Object -First 1).Trim()
+    $after = (Run-Git -Cwd $worktree -GitArgs @("rev-parse", "HEAD") | Select-Object -First 1).Trim()
     $changed = $before -ne $after
     $lastSubject = ""
     if ($changed) {
-      $lastSubject = (Run-Git -Cwd $worktree -Args @("log", "-1", "--pretty=%s") | Select-Object -First 1).Trim()
+      $lastSubject = (Run-Git -Cwd $worktree -GitArgs @("log", "-1", "--pretty=%s") | Select-Object -First 1).Trim()
     }
     else {
-      Run-Git -Cwd $worktree -Args @("reset", "--hard", "HEAD") | Out-Null
+      Run-Git -Cwd $worktree -GitArgs @("reset", "--hard", "HEAD") | Out-Null
     }
 
     $result = [pscustomobject]@{
@@ -180,7 +180,7 @@ Do not edit files. Do not choose a different commit message. Report whether the 
 }
 finally {
   if ($Cleanup) {
-    Run-Git -Cwd $repoRoot -Args @("worktree", "remove", "--force", $worktree) | Out-Null
+    Run-Git -Cwd $repoRoot -GitArgs @("worktree", "remove", "--force", $worktree) | Out-Null
   }
 }
 
